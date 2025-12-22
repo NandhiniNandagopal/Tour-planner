@@ -20,16 +20,12 @@ if 'trip_df' not in st.session_state:
 if 'distance' not in st.session_state:
     st.session_state.distance = 0
 
-# --- 1. UPDATED CSS (Bold & Professional) ---
+# --- 1. LIGHT THEME CSS (Clean & Professional) ---
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 .stApp {
-    background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)), 
-                url(https://images.unsplash.com/photo-1507525428034-b723cf961d3e?fit=crop&w=1950&q=80);
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
     font-family: 'Inter', sans-serif;
 }
 .header-container {
@@ -41,7 +37,7 @@ st.markdown("""
 .brand-title {
     font-size: 30px !important;
     font-weight: 800 !important;
-    background: linear-gradient(90deg, #00d4ff, #00ff88);
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     letter-spacing: -0.5px;
@@ -50,40 +46,58 @@ st.markdown("""
 }
 .brand-tagline {
     font-size: 11px !important;
-    color: #00d4ff !important;
+    color: #64748b !important;
     text-transform: uppercase;
     letter-spacing: 4px;
-    font-weight: 400;
+    font-weight: 500;
     margin: 0 !important;
-    opacity: 0.8;
 }
 .architect-pill {
     display: inline-block;
-    padding: 10px 30px;
+    padding: 12px 32px;
     margin-top: 15px !important;
-    background: rgba(0, 212, 255, 0.12);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(0, 212, 255, 0.3);
-    border-left: 6px solid #00d4ff;
-    border-radius: 6px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.9);
+    border-left: 6px solid #2563eb;
+    border-radius: 12px;
     font-size: 32px !important;
-    font-weight: 300 !important;
-    letter-spacing: 6px !important;
-    color: #ffffff !important;
+    font-weight: 400 !important;
+    letter-spacing: 4px !important;
+    color: #1e293b !important;
     text-transform: uppercase;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
 }
 .stat-box, .place-card, .restaurant-card, .itinerary-box {
-    background: rgba(255, 255, 255, 0.05) !important;
+    background: rgba(255, 255, 255, 0.85) !important;
     backdrop-filter: blur(15px);
-    padding: 20px;
+    padding: 24px;
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 15px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    margin-bottom: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+.stat-box:hover, .place-card:hover, .restaurant-card:hover, .itinerary-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
 }
 .visit-link {
-    color: #00d4ff !important;
+    color: #2563eb !important;
     text-decoration: none;
+    font-weight: 500;
+}
+.visit-link:hover {
+    color: #1d4ed8 !important;
+    text-decoration: underline;
+}
+h3 {
+    color: #1e293b !important;
+    font-weight: 600 !important;
+}
+h4 {
+    color: #334155 !important;
+    font-weight: 600 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -113,7 +127,7 @@ if logo_base64:
 else:
     header_html = """
     <div class="header-container">
-        <div style="width:50px; height:50px; background:#00d4ff; border-radius:10px;"></div>
+        <div style="width:50px; height:50px; background:linear-gradient(135deg, #2563eb, #3b82f6); border-radius:12px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);"></div>
         <div>
             <p class="brand-title">PRIMECORE</p>
             <p class="brand-tagline">Technology Solutions</p>
@@ -229,28 +243,28 @@ if st.session_state.trip_plan:
         st.markdown(f"""
         <div class="stat-box">
             <b>📏 Distance</b><br>
-            {st.session_state.distance} KM
+            <span style="font-size: 24px; font-weight: 700; color: #1e293b;">{st.session_state.distance} KM</span>
         </div>
         """, unsafe_allow_html=True)
     with s2:
         st.markdown(f"""
         <div class="stat-box">
             <b>💰 AI Budget</b><br>
-            ${p['totalbudget']}
+            <span style="font-size: 24px; font-weight: 700; color: #059669;">${p['totalbudget']}</span>
         </div>
         """, unsafe_allow_html=True)
     with s3:
         st.markdown(f"""
         <div class="stat-box">
             <b>🚗 Transport</b><br>
-            {p['travelmode']}
+            <span style="font-size: 20px; font-weight: 600; color: #2563eb;">{p['travelmode']}</span>
         </div>
         """, unsafe_allow_html=True)
     with s4:
         st.markdown(f"""
         <div class="stat-box">
             <b>👥 Travelers</b><br>
-            {memval} Pax
+            <span style="font-size: 24px; font-weight: 700; color: #64748b;">{memval} Pax</span>
         </div>
         """, unsafe_allow_html=True)
     
@@ -262,7 +276,8 @@ if st.session_state.trip_plan:
         for day, activity in p['itinerary'].items():
             st.markdown(f"""
             <div class="itinerary-box">
-                <b>{day}</b><br>{activity}
+                <h3 style="color:#1e293b; margin:0 0 12px 0; font-size: 28px;">{day}</h3>
+                <p style="font-size:18px; line-height:1.6; color:#475569;">{activity}</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -271,9 +286,9 @@ if st.session_state.trip_plan:
         for place in p['places']:
             st.markdown(f"""
             <div class="place-card">
-                <h3 style="color:#00d4ff; margin:0">{place['name']}</h3>
-                <p style="font-size:18px">{place['info']}</p>
-                <p><b>📅 Best Visit:</b> {place['time']}</p>
+                <h3 style="color:#2563eb; margin:0 0 16px 0; font-size: 24px;">{place['name']}</h3>
+                <p style="font-size:18px; line-height:1.7; color:#475569;">{place['info']}</p>
+                <p style="font-size:16px; margin-top:12px;"><b>📅 Best Visit:</b> <span style="color:#059669;">{place['time']}</span></p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -284,9 +299,9 @@ if st.session_state.trip_plan:
             for res in p['restaurants']:
                 st.markdown(f"""
                 <div class="restaurant-card">
-                    <h4 style="color:#00d4ff; margin:0">{res['name']}</h4>
-                    <p style="margin:0">Cuisine: {res['specialty']}</p>
-                    <a href="{res['link']}" target="_blank" class="visit-link">🌐 Website</a>
+                    <h4 style="color:#dc2626; margin:0 0 8px 0;">{res['name']}</h4>
+                    <p style="margin:0 0 12px 0; color:#64748b; font-weight:500;">Cuisine: {res['specialty']}</p>
+                    <a href="{res['link']}" target="_blank" class="visit-link">🌐 Website →</a>
                 </div>
                 """, unsafe_allow_html=True)
         with col_stay:
@@ -294,33 +309,5 @@ if st.session_state.trip_plan:
             for hot in p['hotels']:
                 st.markdown(f"""
                 <div class="restaurant-card">
-                    <h4 style="color:#00ff88; margin:0">{hot['name']}</h4>
-                    <p style="margin:0">{hot['tier']} • {hot['price']}</p>
-                    <a href="{hot['link']}" target="_blank" class="visit-link" style="color:#00ff88 !important">🌐 Book Now</a>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    with tab4:
-        st.subheader("🧠 Geographic Intelligent Path (KMeans Clustering)")
-        if df is not None and not df.empty:
-            # NEW: Cluster-colored map
-            m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
-            
-            # Draw optimized cluster path
-            path = list(zip(df.lat, df.lon))
-            folium.PolyLine(path, color="#00d4ff", weight=5, opacity=0.8).add_to(m)
-            
-            # Cluster-colored markers
-            cluster_colors = ['red', 'blue', 'green', 'orange', 'purple', 'pink', 'darkred', 'lightred']
-            for idx, row in df.iterrows():
-                color = cluster_colors[int(row['cluster']) % len(cluster_colors)]
-                folium.Marker(
-                    [row.lat, row.lon], 
-                    popup=f"{row.name}<br>Cluster {row.cluster}",
-                    icon=folium.Icon(color=color, icon="info-sign")
-                ).add_to(m)
-            
-            st_folium(m, width=1100, height=500, key="primeroutemap")
-
-st.sidebar.button("🔄 Reset Application", on_click=lambda: st.session_state.clear())
-
+                    <h4 style="color:#059669; margin:0 0 8px 0;">{hot['name']}</h4>
+                    <p style="margin
