@@ -191,7 +191,7 @@ with st.container():
     
     colsub1, colsub2 = st.columns(2)
     with colsub1:
-        memval = st.number_input("Pax", 1, 20, 2)
+        memval = st.number_input("Persons", 1, 20, 2)
     with colsub2:
         keyval = st.sidebar.text_input("Groq API Key", type="password")
 
@@ -255,7 +255,7 @@ if st.session_state.trip_plan:
         """, unsafe_allow_html=True)
     
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 ITINERARY", "🗺️ PLACE EXPLORER", "🍽️ DINING & HOTELS", "🗺️ ML ROUTE MAP"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 PLANS", "🗺️ PLACE EXPLORER", "🍽️ DINING & HOTELS", "🗺️ ML ROUTE MAP"])
     
     with tab1:
         st.subheader("Precise Daily Schedule")
@@ -323,3 +323,4 @@ if st.session_state.trip_plan:
             st_folium(m, width=1100, height=500, key="primeroutemap")
 
 st.sidebar.button("🔄 Reset Application", on_click=lambda: st.session_state.clear())
+
