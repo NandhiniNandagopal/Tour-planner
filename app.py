@@ -9,14 +9,9 @@ from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from streamlit_folium import st_folium
 from sklearn.cluster import KMeans
-import base64
 
 # --- 1. PAGE CONFIG & PERSISTENCE ---
-st.set_page_config(
-    page_title="PrimeCore | Global AI Trip Planner",
-    layout="wide",
-    page_icon="🚀"
-)
+st.set_page_config(page_title="PrimeCore | Global AI Trip Planner", layout="wide", page_icon="🚀")
 
 if 'trip_plan' not in st.session_state:
     st.session_state.trip_plan = None
@@ -25,7 +20,7 @@ if 'trip_df' not in st.session_state:
 if 'distance' not in st.session_state:
     st.session_state.distance = 0
 
-# --- 2. CSS (Dark beach background) ---
+# --- 1. UPDATED CSS (Bold & Professional) ---
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;800&display=swap');
@@ -93,12 +88,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HEADER LOGO ---
+# --- 2. THE HEADER LOGO ---
+import base64
+
 def get_base64_image(image_path):
     try:
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
-    except Exception:
+    except:
         return None
 
 logo_base64 = get_base64_image("logo.png")
@@ -147,6 +144,7 @@ Return ONLY a JSON object:
     "hotels": [{{"name": "Name", "tier": "Budget/Luxury", "price": "$X", "link": "URL"}}],
     "mapcoords": ["Spot 1", "Spot 2", "Spot 3"]
 }}"""
+    
     chat = client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model="llama-3.3-70b-versatile",
@@ -158,23 +156,23 @@ def get_mapping(fromp, top, landmarks):
     geolocator = Nominatim(user_agent="primecoretrending2025")
     points = []
     routelist = [fromp] + landmarks + [top]
-
+    
     for q in routelist:
         try:
             time.sleep(1.2)
             loc = geolocator.geocode(q)
             if loc:
                 points.append({"name": q, "lat": loc.latitude, "lon": loc.longitude})
-        except Exception:
+        except:
             continue
-
+    
     return pd.DataFrame(points)
 
 def cluster_attractions(df, n_clusters):
-    """KMeans clustering for optimal geographic grouping"""
-    if df is None or df.empty or len(df) < 2:
+    """NEW: KMeans clustering for optimal geographic grouping"""
+    if len(df) < 2:
         return df
-
+    
     coords = df[['lat', 'lon']].values
     kmeans = KMeans(n_clusters=min(n_clusters, len(df)), random_state=42)
     df['cluster'] = kmeans.fit_predict(coords)
@@ -190,46 +188,42 @@ with st.container():
         toval = st.text_input("Destination", "Zurich, Switzerland")
     with c3:
         dayval = st.number_input("Days", 1, 30, 4)
-
+    
     colsub1, colsub2 = st.columns(2)
     with colsub1:
         memval = st.number_input("Persons", 1, 20, 2)
     with colsub2:
         keyval = st.sidebar.text_input("Groq API Key", type="password")
 
-# --- 6. RUN ANALYTICS ---
 if st.button("🚀 EXECUTE TRIP ANALYTICS"):
     if not keyval:
         st.error("API Key Required!")
     else:
         with st.spinner("PrimeCore Engine Processing Global Logistics..."):
+            # Generate AI plan
             plan = get_itinerary_ai(fromval, toval, dayval, memval, keyval)
             st.session_state.trip_plan = plan
-
+            
+            # Get coordinates + NEW: Apply KMeans clustering
             st.session_state.trip_df = get_mapping(fromval, toval, plan['mapcoords'])
             df = cluster_attractions(st.session_state.trip_df, dayval)
             st.session_state.trip_df = df
+            
+            # Calculate total distance
+            start = df[df['name'].str.lower().str.contains(fromval.lower())]
+            end = df[df['name'].str.lower().str.contains(toval.lower())]
+            if not start.empty and not end.empty:
+                st.session_state.distance = int(geodesic(
+                    (start.lat.values[0], start.lon.values[0]), 
+                    (end.lat.values[0], end.lon.values[0])
+                ).km)
 
-            # Safe distance calculation
-            if df is None or df.empty or 'name' not in df.columns:
-                st.session_state.distance = 0
-            else:
-                start = df[df['name'].str.lower().str.contains(fromval.lower())]
-                end = df[df['name'].str.lower().str.contains(toval.lower())]
-                if not start.empty and not end.empty:
-                    st.session_state.distance = int(geodesic(
-                        (start.lat.values[0], start.lon.values[0]),
-                        (end.lat.values[0], end.lon.values[0])
-                    ).km)
-                else:
-                    st.session_state.distance = 0
-
-# --- 7. DASHBOARD OUTPUT ---
+# --- 6. THE DASHBOARD OUTPUT ---
 if st.session_state.trip_plan:
     p = st.session_state.trip_plan
     df = st.session_state.trip_df
-
-    # Stats row
+    
+    # Stats Row
     s1, s2, s3, s4 = st.columns(4)
     with s1:
         st.markdown(f"""
@@ -259,12 +253,10 @@ if st.session_state.trip_plan:
             {memval} Pax
         </div>
         """, unsafe_allow_html=True)
-
+    
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["📋 PLANS", "🗺️ PLACE EXPLORER", "🍽️ DINING & HOTELS", "🗺️ ML ROUTE MAP"]
-    )
-
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 PLANS", "🗺️ PLACE EXPLORER", "🍽️ DINING & HOTELS", "🗺️ ML ROUTE MAP"])
+    
     with tab1:
         st.subheader("Precise Daily Schedule")
         for day, activity in p['itinerary'].items():
@@ -273,7 +265,7 @@ if st.session_state.trip_plan:
                 <b>{day}</b><br>{activity}
             </div>
             """, unsafe_allow_html=True)
-
+    
     with tab2:
         st.subheader("Tourist Insights")
         for place in p['places']:
@@ -284,7 +276,7 @@ if st.session_state.trip_plan:
                 <p><b>📅 Best Visit:</b> {place['time']}</p>
             </div>
             """, unsafe_allow_html=True)
-
+    
     with tab3:
         col_food, col_stay = st.columns(2)
         with col_food:
@@ -307,38 +299,27 @@ if st.session_state.trip_plan:
                     <a href="{hot['link']}" target="_blank" class="visit-link" style="color:#00ff88 !important">🌐 Book Now</a>
                 </div>
                 """, unsafe_allow_html=True)
-
+    
     with tab4:
         st.subheader("🧠 Geographic Intelligent Path (KMeans Clustering)")
         if df is not None and not df.empty:
+            # NEW: Cluster-colored map
             m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
-
+            
+            # Draw optimized cluster path
             path = list(zip(df.lat, df.lon))
             folium.PolyLine(path, color="#00d4ff", weight=5, opacity=0.8).add_to(m)
-
-            cluster_colors = [
-                'red', 'blue', 'green', 'orange',
-                'purple', 'pink', 'darkred', 'lightred'
-            ]
-            if 'cluster' in df.columns:
-                for idx, row in df.iterrows():
-                    color = cluster_colors[int(row['cluster']) % len(cluster_colors)]
-                    folium.Marker(
-                        [row.lat, row.lon],
-                        popup=f"{row.name}<br>Cluster {row.cluster}",
-                        icon=folium.Icon(color=color, icon="info-sign")
-                    ).add_to(m)
-            else:
-                # fallback markers without clusters
-                for idx, row in df.iterrows():
-                    folium.Marker(
-                        [row.lat, row.lon],
-                        popup=row.name,
-                        icon=folium.Icon(color="blue", icon="info-sign")
-                    ).add_to(m)
-
+            
+            # Cluster-colored markers
+            cluster_colors = ['red', 'blue', 'green', 'orange', 'purple', 'pink', 'darkred', 'lightred']
+            for idx, row in df.iterrows():
+                color = cluster_colors[int(row['cluster']) % len(cluster_colors)]
+                folium.Marker(
+                    [row.lat, row.lon], 
+                    popup=f"{row.name}<br>Cluster {row.cluster}",
+                    icon=folium.Icon(color=color, icon="info-sign")
+                ).add_to(m)
+            
             st_folium(m, width=1100, height=500, key="primeroutemap")
 
-# --- 8. RESET BUTTON ---
 st.sidebar.button("🔄 Reset Application", on_click=lambda: st.session_state.clear())
-
