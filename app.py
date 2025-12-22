@@ -310,4 +310,32 @@ if st.session_state.trip_plan:
                 st.markdown(f"""
                 <div class="restaurant-card">
                     <h4 style="color:#059669; margin:0 0 8px 0;">{hot['name']}</h4>
-                    <p style="margin
+                    <p style="margin:0 0 12px 0; color:#64748b; font-weight:500;">{hot['tier']} • {hot['price']}</p>
+                    <a href="{hot['link']}" target="_blank" class="visit-link">🌐 Book Now →</a>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with tab4:
+        st.subheader("🧠 Geographic Intelligent Path (KMeans Clustering)")
+        if df is not None and not df.empty:
+            # NEW: Cluster-colored map
+            m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
+            
+            # Draw optimized cluster path
+            path = list(zip(df.lat, df.lon))
+            folium.PolyLine(path, color="#2563eb", weight=5, opacity=0.8).add_to(m)
+            
+            # Cluster-colored markers
+            cluster_colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6']
+            for idx, row in df.iterrows():
+                color = cluster_colors[int(row['cluster']) % len(cluster_colors)]
+                folium.Marker(
+                    [row.lat, row.lon], 
+                    popup=f"{row.name}<br>Cluster {row.cluster}",
+                    icon=folium.Icon(color=color, icon="info-sign")
+                ).add_to(m)
+            
+            st_folium(m, width=1100, height=500, key="primeroutemap")
+
+st.sidebar.button("🔄 Reset Application", on_click=lambda: st.session_state.clear())
+
