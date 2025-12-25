@@ -279,8 +279,8 @@ if st.session_state.trip_plan:
             )
             for _, r in df.iterrows():
                 folium.Marker(
-                    [r.lat, r.lon],
-                    popup=f"{r.name} (Day {r.day})"
+                    [r["lat"], r["lon"]],
+                    popup=f"{r['name']} (Day {r['day']})"
                 ).add_to(m)
             folium.PolyLine(list(zip(df.lat, df.lon))).add_to(m)
             st_folium(m, width=1100, height=500)
@@ -292,3 +292,4 @@ if st.session_state.trip_plan:
     )
 
 st.sidebar.button("🔄 Reset", on_click=lambda: st.session_state.clear())
+
