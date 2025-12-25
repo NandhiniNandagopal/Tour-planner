@@ -1,7 +1,10 @@
+import os
+import time
+import json
+import base64
+
 import streamlit as st
 import pandas as pd
-import json
-import time
 import folium
 import numpy as np
 from groq import Groq
@@ -9,28 +12,32 @@ from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from streamlit_folium import st_folium
 from sklearn.cluster import KMeans
-import base64
 
-# --- 1. PAGE CONFIG & PERSISTENCE ---
+# =========================================================
+# CONFIG
+# =========================================================
 st.set_page_config(
     page_title="PrimeCore | Global AI Trip Planner",
     layout="wide",
-    page_icon="🚀"
+    page_icon="🚀",
 )
 
-if 'trip_plan' not in st.session_state:
+if "trip_plan" not in st.session_state:
     st.session_state.trip_plan = None
-if 'trip_df' not in st.session_state:
+if "trip_df" not in st.session_state:
     st.session_state.trip_df = None
-if 'distance' not in st.session_state:
+if "distance" not in st.session_state:
     st.session_state.distance = 0
 
-# --- 2. CSS (Dark beach background) ---
-st.markdown("""
+# =========================================================
+# CSS
+# =========================================================
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;800&display=swap');
 .stApp {
-    background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)), 
+    background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)),
                 url(https://images.unsplash.com/photo-1507525428034-b723cf961d3e?fit=crop&w=1950&q=80);
     background-size: cover;
     background-position: center;
@@ -91,21 +98,26 @@ st.markdown("""
     text-decoration: none;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# --- 3. HEADER LOGO ---
-def get_base64_image(image_path):
+# =========================================================
+# HEADER
+# =========================================================
+def get_base64_image(path: str):
     try:
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
     except Exception:
         return None
 
-logo_base64 = get_base64_image("logo.png")
-if logo_base64:
+logo_b64 = get_base64_image("logo.png")
+
+if logo_b64:
     header_html = f"""
     <div class="header-container">
-        <img src="data:image/png;base64,{logo_base64}" width="65">
+        <img src="data:image/png;base64,{logo_b64}" width="65">
         <div>
             <p class="brand-title">PRIMECORE</p>
             <p class="brand-tagline">Technology Solutions</p>
@@ -128,10 +140,20 @@ else:
 st.markdown(header_html, unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 4. BACKEND FUNCTIONS ---
-def get_itinerary_ai(fromp, top, days, members, apikey):
-    client = Groq(api_key=apikey)
-    prompt = f"""Comprehensive Travel Analytics for {fromp} to {top}. {days} days, {members} travelers.
+# =========================================================
+# GROQ CLIENT (API KEY FROM ENV/SECRETS)
+# =========================================================
+# Put your key in environment or .streamlit/secrets.toml as GROQ_API_KEY
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", st.secrets.get("GROQ_API_KEY", ""))
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# =========================================================
+# BACKEND HELPERS
+# =========================================================
+def get_itinerary_ai(origin: str, dest: str, days: int, members: int) -> dict:
+    prompt = f"""
+Comprehensive Travel Analytics for {origin} to {dest}. {days} days, {members} travelers.
 1. Calculate total trip budget in $.
 2. Summary itinerary (max 2 lines per day).
 3. Detailed info (5 lines) for 3 primary landmarks.
@@ -139,27 +161,29 @@ def get_itinerary_ai(fromp, top, days, members, apikey):
 5. CRITICAL: Provide verified URLs for every Hotel and Restaurant.
 Return ONLY a JSON object:
 {{
-    "totalbudget": "XXXXX",
-    "travelmode": "Best transport",
-    "itinerary": {{"Day 1": "...", "Day 2": "..."}},
-    "places": [{{"name": "Name", "info": "5 lines info", "time": "Best time"}}],
-    "restaurants": [{{"name": "Name", "specialty": "Dish", "link": "URL"}}],
-    "hotels": [{{"name": "Name", "tier": "Budget/Luxury", "price": "$X", "link": "URL"}}],
-    "mapcoords": ["Spot 1", "Spot 2", "Spot 3"]
-}}"""
+  "totalbudget": "XXXXX",
+  "travelmode": "Best transport",
+  "itinerary": {{"Day 1": "...", "Day 2": "..."}},
+  "places": [{{"name": "Name", "info": "5 lines info", "time": "Best time"}}],
+  "restaurants": [{{"name": "Name", "specialty": "Dish", "link": "URL"}}],
+  "hotels": [{{"name": "Name", "tier": "Budget/Luxury", "price": "$X", "link": "URL"}}],
+  "mapcoords": ["Spot 1", "Spot 2", "Spot 3"]
+}}
+"""
+
     chat = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",  # Groq text model.[web:23]
         messages=[{"role": "user", "content": prompt}],
-        model="llama-3.3-70b-versatile",
-        response_format={"type": "json_object"}
+        response_format={"type": "json_object"},
     )
     return json.loads(chat.choices[0].message.content)
 
-def get_mapping(fromp, top, landmarks):
+def get_mapping(origin, dest, landmarks):
     geolocator = Nominatim(user_agent="primecoretrending2025")
     points = []
-    routelist = [fromp] + landmarks + [top]
+    route = [origin] + landmarks + [dest]
 
-    for q in routelist:
+    for q in route:
         try:
             time.sleep(1.2)
             loc = geolocator.geocode(q)
@@ -171,173 +195,210 @@ def get_mapping(fromp, top, landmarks):
     return pd.DataFrame(points)
 
 def cluster_attractions(df, n_clusters):
-    """KMeans clustering for optimal geographic grouping"""
     if df is None or df.empty or len(df) < 2:
         return df
+    coords = df[["lat", "lon"]].values
+    kmeans = KMeans(
+        n_clusters=min(n_clusters, len(df)),
+        random_state=42,
+        n_init="auto",
+    )
+    df["cluster"] = kmeans.fit_predict(coords)
+    return df.sort_values("cluster")
 
-    coords = df[['lat', 'lon']].values
-    kmeans = KMeans(n_clusters=min(n_clusters, len(df)), random_state=42)
-    df['cluster'] = kmeans.fit_predict(coords)
-    return df.sort_values('cluster')
-
-# --- 5. UI INPUT ---
+# =========================================================
+# INPUT UI
+# =========================================================
 st.markdown("<br>", unsafe_allow_html=True)
+
 with st.container():
     c1, c2, c3 = st.columns([1.5, 1, 1])
     with c1:
-        fromval = st.text_input("Origin City", "Mumbai, India")
+        origin = st.text_input("Origin City", "Mumbai, India")
     with c2:
-        toval = st.text_input("Destination", "Zurich, Switzerland")
+        dest = st.text_input("Destination", "Zurich, Switzerland")
     with c3:
-        dayval = st.number_input("Days", 1, 30, 4)
+        days = st.number_input("Days", 1, 30, 4)
 
-    colsub1, colsub2 = st.columns(2)
-    with colsub1:
-        memval = st.number_input("Persons", 1, 20, 2)
-    with colsub2:
-        keyval = st.sidebar.text_input("Groq API Key", type="password")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        members = st.number_input("Persons", 1, 20, 2)
+    with col_b:
+        st.sidebar.write("Groq API key is configured on the server.")
 
-# --- 6. RUN ANALYTICS ---
+# =========================================================
+# RUN BUTTON
+# =========================================================
 if st.button("🚀 EXECUTE TRIP ANALYTICS"):
-    if not keyval:
-        st.error("API Key Required!")
+    if not GROQ_API_KEY:
+        st.error("Groq API key is not set on the server.")
     else:
-        with st.spinner("PrimeCore Engine Processing Global Logistics..."):
-            plan = get_itinerary_ai(fromval, toval, dayval, memval, keyval)
-            st.session_state.trip_plan = plan
+        try:
+            with st.spinner("PrimeCore Engine Processing Global Logistics..."):
+                plan = get_itinerary_ai(origin, dest, days, members)
+                st.session_state.trip_plan = plan
 
-            st.session_state.trip_df = get_mapping(fromval, toval, plan['mapcoords'])
-            df = cluster_attractions(st.session_state.trip_df, dayval)
-            st.session_state.trip_df = df
+                st.session_state.trip_df = get_mapping(
+                    origin, dest, plan.get("mapcoords", [])
+                )
+                df = cluster_attractions(st.session_state.trip_df, days)
+                st.session_state.trip_df = df
 
-            # Safe distance calculation
-            if df is None or df.empty or 'name' not in df.columns:
-                st.session_state.distance = 0
-            else:
-                start = df[df['name'].str.lower().str.contains(fromval.lower())]
-                end = df[df['name'].str.lower().str.contains(toval.lower())]
-                if not start.empty and not end.empty:
-                    st.session_state.distance = int(geodesic(
-                        (start.lat.values[0], start.lon.values[0]),
-                        (end.lat.values[0], end.lon.values[0])
-                    ).km)
-                else:
+                if df is None or df.empty or "name" not in df.columns:
                     st.session_state.distance = 0
+                else:
+                    start = df[df["name"].str.lower().str.contains(origin.lower())]
+                    end = df[df["name"].str.lower().str.contains(dest.lower())]
+                    if not start.empty and not end.empty:
+                        st.session_state.distance = int(
+                            geodesic(
+                                (start.lat.values[0], start.lon.values[0]),
+                                (end.lat.values[0], end.lon.values[0]),
+                            ).km
+                        )
+                    else:
+                        st.session_state.distance = 0
+        except Exception as e:
+            st.error(f"Trip generation failed: {e}")
 
-# --- 7. DASHBOARD OUTPUT ---
+# =========================================================
+# OUTPUT
+# =========================================================
 if st.session_state.trip_plan:
     p = st.session_state.trip_plan
     df = st.session_state.trip_df
 
-    # Stats row
     s1, s2, s3, s4 = st.columns(4)
     with s1:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="stat-box">
             <b>📏 Distance</b><br>
             {st.session_state.distance} KM
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with s2:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="stat-box">
             <b>💰 AI Budget</b><br>
-            ${p['totalbudget']}
+            ${p.get("totalbudget", "N/A")}
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with s3:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="stat-box">
             <b>🚗 Transport</b><br>
-            {p['travelmode']}
+            {p.get("travelmode", "N/A")}
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with s4:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="stat-box">
             <b>👥 Travelers</b><br>
-            {memval} Pax
+            {members} Pax
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
-    # Tabs
     tab1, tab2, tab3, tab4 = st.tabs(
         ["📋 PLANS", "🗺️ PLACE EXPLORER", "🍽️ DINING & HOTELS", "🗺️ ML ROUTE MAP"]
     )
 
     with tab1:
         st.subheader("Precise Daily Schedule")
-        for day, activity in p['itinerary'].items():
-            st.markdown(f"""
+        for day_label, activity in p.get("itinerary", {}).items():
+            st.markdown(
+                f"""
             <div class="itinerary-box">
-                <b>{day}</b><br>{activity}
+                <b>{day_label}</b><br>{activity}
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
     with tab2:
         st.subheader("Tourist Insights")
-        for place in p['places']:
-            st.markdown(f"""
+        for place in p.get("places", []):
+            st.markdown(
+                f"""
             <div class="place-card">
                 <h3 style="color:#00d4ff; margin:0">{place['name']}</h3>
                 <p style="font-size:18px">{place['info']}</p>
                 <p><b>📅 Best Visit:</b> {place['time']}</p>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
     with tab3:
         col_food, col_stay = st.columns(2)
         with col_food:
             st.subheader("Top Eateries")
-            for res in p['restaurants']:
-                st.markdown(f"""
+            for res in p.get("restaurants", []):
+                st.markdown(
+                    f"""
                 <div class="restaurant-card">
                     <h4 style="color:#00d4ff; margin:0">{res['name']}</h4>
                     <p style="margin:0">Cuisine: {res['specialty']}</p>
                     <a href="{res['link']}" target="_blank" class="visit-link">🌐 Website</a>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
         with col_stay:
             st.subheader("Top Hotel Picks")
-            for hot in p['hotels']:
-                st.markdown(f"""
+            for hot in p.get("hotels", []):
+                st.markdown(
+                    f"""
                 <div class="restaurant-card">
                     <h4 style="color:#00ff88; margin:0">{hot['name']}</h4>
                     <p style="margin:0">{hot['tier']} • {hot['price']}</p>
                     <a href="{hot['link']}" target="_blank" class="visit-link" style="color:#00ff88 !important">🌐 Book Now</a>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
     with tab4:
         st.subheader("🧠 Geographic Intelligent Path (KMeans Clustering)")
         if df is not None and not df.empty:
             m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
-
             path = list(zip(df.lat, df.lon))
             folium.PolyLine(path, color="#00d4ff", weight=5, opacity=0.8).add_to(m)
 
             cluster_colors = [
-                'red', 'blue', 'green', 'orange',
-                'purple', 'pink', 'darkred', 'lightred'
+                "red", "blue", "green", "orange",
+                "purple", "pink", "darkred", "lightred",
             ]
-            if 'cluster' in df.columns:
-                for idx, row in df.iterrows():
-                    color = cluster_colors[int(row['cluster']) % len(cluster_colors)]
+            if "cluster" in df.columns:
+                for _, row in df.iterrows():
+                    color = cluster_colors[int(row["cluster"]) % len(cluster_colors)]
                     folium.Marker(
                         [row.lat, row.lon],
                         popup=f"{row.name}<br>Cluster {row.cluster}",
-                        icon=folium.Icon(color=color, icon="info-sign")
+                        icon=folium.Icon(color=color, icon="info-sign"),
                     ).add_to(m)
             else:
-                # fallback markers without clusters
-                for idx, row in df.iterrows():
+                for _, row in df.iterrows():
                     folium.Marker(
                         [row.lat, row.lon],
                         popup=row.name,
-                        icon=folium.Icon(color="blue", icon="info-sign")
+                        icon=folium.Icon(color="blue", icon="info-sign"),
                     ).add_to(m)
 
             st_folium(m, width=1100, height=500, key="primeroutemap")
 
-# --- 8. RESET BUTTON ---
+# =========================================================
+# RESET
+# =========================================================
 st.sidebar.button("🔄 Reset Application", on_click=lambda: st.session_state.clear())
