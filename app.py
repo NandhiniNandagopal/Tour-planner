@@ -1,7 +1,6 @@
 import os
 import time
 import json
-import base64
 
 import streamlit as st
 import pandas as pd
@@ -9,7 +8,6 @@ import folium
 import numpy as np
 from groq import Groq
 from geopy.geocoders import Nominatim
-from geopy.distance import geodesic
 from streamlit_folium import st_folium
 from sklearn.cluster import KMeans
 
@@ -22,7 +20,7 @@ st.set_page_config(
     page_icon="🚀",
 )
 
-for key in ["trip_plan", "trip_df", "distance"]:
+for key in ["trip_plan", "trip_df"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -37,7 +35,7 @@ st.markdown("""
     background-size: cover;
     background-attachment: fixed;
 }
-.stat-box, .card {
+.card {
     background: rgba(255,255,255,.06);
     backdrop-filter: blur(15px);
     padding: 18px;
@@ -82,7 +80,7 @@ Return ONLY valid JSON:
  "totalbudget": "number",
  "travelmode": "string",
  "weather": "2 line summary",
- "itinerary": {{"Day 1":"...", "Day 2":"..."}},
+ "itinerary": {{"Day 1":"...", "Day 2":"..." }},
  "places":[{{"name":"", "info":"5 lines", "time":""}}],
  "restaurants":[{{"name":"","specialty":"","link":""}}],
  "hotels":[{{"name":"","tier":"","price":"","link":""}}],
@@ -117,21 +115,21 @@ def cluster_route(df, days):
         return df
     k = min(days, len(df))
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-    df["cluster"] = km.fit_predict(df[["lat","lon"]])
+    df["cluster"] = km.fit_predict(df[["lat", "lon"]])
     return df.sort_values("cluster")
 
 # =========================================================
 # INPUT UI
 # =========================================================
-c1,c2,c3,c4 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 with c1:
     origin = st.text_input("Origin", "Mumbai, India")
 with c2:
     dest = st.text_input("Destination", "Zurich, Switzerland")
 with c3:
-    days = st.number_input("Days",1,30,4)
+    days = st.number_input("Days", 1, 30, 4)
 with c4:
-    members = st.number_input("People",1,20,2)
+    members = st.number_input("People", 1, 20, 2)
 
 theme = st.selectbox(
     "Trip Style",
@@ -146,20 +144,12 @@ if st.button("🚀 BUILD MY TRIP"):
         st.error("Groq API Key missing.")
     else:
         with st.spinner("Architecting your journey..."):
-            plan = get_itinerary_ai(origin,dest,days,members,theme)
+            plan = get_itinerary_ai(origin, dest, days, members, theme)
             st.session_state.trip_plan = plan
 
-            df = geocode_places([origin]+plan["mapcoords"]+[dest])
+            df = geocode_places([origin] + plan["mapcoords"] + [dest])
             df = cluster_route(df, days)
             st.session_state.trip_df = df
-
-            if len(df) >= 2:
-                st.session_state.distance = int(
-                    geodesic(
-                        (df.lat.iloc[0], df.lon.iloc[0]),
-                        (df.lat.iloc[-1], df.lon.iloc[-1])
-                    ).km
-                )
 
 # =========================================================
 # OUTPUT
@@ -169,36 +159,46 @@ if st.session_state.trip_plan:
     df = st.session_state.trip_df
 
     st.markdown("## 📊 Trip Analytics")
-    a,b,c,d = st.columns(4)
-    a.metric("Distance (km)", st.session_state.distance)
-    b.metric("Budget ($)", p["totalbudget"])
-    c.metric("Mode", p["travelmode"])
-    d.metric("Per Day ($)", round(float(p["totalbudget"])/days,2))
+    a, b, c = st.columns(3)
+    a.metric("Budget ($)", p["totalbudget"])
+    b.metric("Mode", p["travelmode"])
+    c.metric("Per Day ($)", round(float(p["totalbudget"]) / days, 2))
 
     st.info(f"🌦️ Weather Insight: {p.get('weather','N/A')}")
 
-    tabs = st.tabs(["📅 Plan","📍 Places","🍽️ Stay & Food","🧠 Smart Map"])
+    tabs = st.tabs(["📅 Plan", "📍 Places", "🍽️ Stay & Food", "🧠 Smart Map"])
 
     with tabs[0]:
-        for d,txt in p["itinerary"].items():
+        for d, txt in p["itinerary"].items():
             st.markdown(f"<div class='card'><b>{d}</b><br>{txt}</div>", unsafe_allow_html=True)
 
     with tabs[1]:
         for pl in p["places"]:
-            st.markdown(f"<div class='card'><h4>{pl['name']}</h4>{pl['info']}<br><b>Best:</b> {pl['time']}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='card'><h4>{pl['name']}</h4>{pl['info']}<br><b>Best:</b> {pl['time']}</div>",
+                unsafe_allow_html=True
+            )
 
     with tabs[2]:
         for r in p["restaurants"]:
-            st.markdown(f"<div class='card'><b>{r['name']}</b><br>{r['specialty']}<br><a href='{r['link']}' target='_blank'>Visit</a></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='card'><b>{r['name']}</b><br>{r['specialty']}<br>"
+                f"<a href='{r['link']}' target='_blank'>Visit</a></div>",
+                unsafe_allow_html=True
+            )
         for h in p["hotels"]:
-            st.markdown(f"<div class='card'><b>{h['name']}</b><br>{h['tier']} • {h['price']}<br><a href='{h['link']}' target='_blank'>Book</a></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='card'><b>{h['name']}</b><br>{h['tier']} • {h['price']}<br>"
+                f"<a href='{h['link']}' target='_blank'>Book</a></div>",
+                unsafe_allow_html=True
+            )
 
     with tabs[3]:
         if df is not None and not df.empty:
             m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
             folium.PolyLine(list(zip(df.lat, df.lon))).add_to(m)
-            for _,r in df.iterrows():
-                folium.Marker([r.lat,r.lon], popup=r.name).add_to(m)
+            for _, r in df.iterrows():
+                folium.Marker([r.lat, r.lon], popup=r.name).add_to(m)
             st_folium(m, height=500, width=1100)
 
     st.download_button(
