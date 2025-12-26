@@ -1,19 +1,18 @@
 import os
 import time
 import json
-import random
 
 import streamlit as st
 import pandas as pd
 import folium
-
+import numpy as np
 from groq import Groq
 from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
 from sklearn.cluster import KMeans
 
 # =========================================================
-# PAGE CONFIG
+# CONFIG
 # =========================================================
 st.set_page_config(
     page_title="PrimeCore | Global AI Trip Planner",
@@ -21,59 +20,52 @@ st.set_page_config(
     page_icon="🚀",
 )
 
-# =========================================================
-# SESSION STATE
-# =========================================================
-if "trip_plan" not in st.session_state:
-    st.session_state.trip_plan = None
-if "trip_df" not in st.session_state:
-    st.session_state.trip_df = None
+for key in ["trip_plan", "trip_df"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 # =========================================================
-# STYLE
+# CSS
 # =========================================================
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(rgba(0,0,0,.75), rgba(0,0,0,.75)),
+    background: linear-gradient(rgba(0,0,0,.78), rgba(0,0,0,.78)),
     url(https://images.unsplash.com/photo-1507525428034-b723cf961d3e);
     background-size: cover;
+    background-attachment: fixed;
 }
 .card {
-    background: rgba(255,255,255,.08);
-    padding: 16px;
-    border-radius: 16px;
-    margin-bottom: 12px;
+    background: rgba(255,255,255,.06);
+    backdrop-filter: blur(15px);
+    padding: 18px;
+    border-radius: 18px;
+    margin-bottom: 14px;
 }
-.tag {
-    display:inline-block;
-    padding:4px 10px;
-    border-radius:12px;
-    font-size:12px;
-    background:#00d4ff22;
-    margin-right:6px;
-}
+a { color:#00d4ff !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown("<h1 style='color:#00d4ff'>PRIMECORE</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#aaa'>Journey Architect</p>", unsafe_allow_html=True)
+st.markdown("""
+<h1 style="color:#00d4ff;">PRIMECORE</h1>
+<p style="letter-spacing:4px;color:#aaa;">JOURNEY ARCHITECT</p>
+""", unsafe_allow_html=True)
 
 # =========================================================
-# GROQ CONFIG
+# GROQ CLIENT
 # =========================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", st.secrets.get("GROQ_API_KEY", ""))
 client = Groq(api_key=GROQ_API_KEY)
 
 # =========================================================
-# AI ITINERARY FUNCTION
+# AI CORE
 # =========================================================
 def get_itinerary_ai(origin, dest, days, members, theme):
     prompt = f"""
-Return ONLY valid JSON.
+You are an elite travel AI.
 
 Trip:
 Origin: {origin}
@@ -82,17 +74,16 @@ Days: {days}
 People: {members}
 Theme: {theme}
 
+Return ONLY valid JSON:
+
 {{
  "totalbudget": "number",
  "travelmode": "string",
- "weather": "2 lines",
- "tips": {{
-   "packing": ["item1","item2"],
-   "safety": ["tip1","tip2"],
-   "customs": ["tip1","tip2"]
- }},
+ "weather": "2 line summary",
  "itinerary": {{"Day 1":"...", "Day 2":"..." }},
- "places":[{{"name":"","info":"","time":""}}],
+ "places":[{{"name":"", "info":"5 lines", "time":""}}],
+ "restaurants":[{{"name":"","specialty":"","link":""}}],
+ "hotels":[{{"name":"","tier":"","price":"","link":""}}],
  "mapcoords":["place1","place2","place3"]
 }}
 """
@@ -104,65 +95,41 @@ Theme: {theme}
     return json.loads(chat.choices[0].message.content)
 
 # =========================================================
-# GEO FUNCTIONS
+# GEO + ML
 # =========================================================
-@st.cache_data(show_spinner=False)
 def geocode_places(places):
-    geo = Nominatim(user_agent="primecore")
-    rows = []
-
-    for place in places:
+    geo = Nominatim(user_agent="primecore2025")
+    data = []
+    for p in places:
         try:
-            time.sleep(0.6)
-            loc = geo.geocode(place)
+            time.sleep(1)
+            loc = geo.geocode(p)
             if loc:
-                rows.append({
-                    "name": place,
-                    "lat": loc.latitude,
-                    "lon": loc.longitude
-                })
+                data.append({"name": p, "lat": loc.latitude, "lon": loc.longitude})
         except:
-            continue
+            pass
+    return pd.DataFrame(data)
 
-    return pd.DataFrame(rows)
-
-def cluster_days(df, days):
-    if df is None or df.empty or len(df) < 2:
+def cluster_route(df, days):
+    if df is None or df.empty:
         return df
-
     k = min(days, len(df))
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-
-    df = df.copy()
-    df["day"] = km.fit_predict(df[["lat", "lon"]]) + 1
-    return df.sort_values("day")
+    df["cluster"] = km.fit_predict(df[["lat", "lon"]])
+    return df.sort_values("cluster")
 
 # =========================================================
-# HELPERS
-# =========================================================
-def budget_split(total):
-    return {
-        "Stay": total * 0.40,
-        "Food": total * 0.25,
-        "Transport": total * 0.20,
-        "Activities": total * 0.15,
-    }
-
-def crowd_level():
-    return random.choice(["🟢 Calm", "🟡 Moderate", "🔴 Crowded"])
-
-def place_score():
-    return random.randint(72, 96)
-
-# =========================================================
-# INPUT SECTION
+# INPUT UI
 # =========================================================
 c1, c2, c3, c4 = st.columns(4)
-
-origin = c1.text_input("Origin", "Mumbai, India")
-dest = c2.text_input("Destination", "Zurich, Switzerland")
-days = c3.number_input("Days", 1, 14, 4)
-members = c4.number_input("People", 1, 10, 2)
+with c1:
+    origin = st.text_input("Origin", "Mumbai, India")
+with c2:
+    dest = st.text_input("Destination", "Zurich, Switzerland")
+with c3:
+    days = st.number_input("Days", 1, 30, 4)
+with c4:
+    members = st.number_input("People", 1, 20, 2)
 
 theme = st.selectbox(
     "Trip Style",
@@ -170,106 +137,77 @@ theme = st.selectbox(
 )
 
 # =========================================================
-# BUILD TRIP
+# EXECUTE
 # =========================================================
 if st.button("🚀 BUILD MY TRIP"):
-    with st.spinner("Designing your journey..."):
-        plan = get_itinerary_ai(origin, dest, days, members, theme)
+    if not GROQ_API_KEY:
+        st.error("Groq API Key missing.")
+    else:
+        with st.spinner("Architecting your journey..."):
+            plan = get_itinerary_ai(origin, dest, days, members, theme)
+            st.session_state.trip_plan = plan
 
-        locations = [origin] + plan.get("mapcoords", []) + [dest]
-        df = geocode_places(locations)
-
-        if df is not None and not df.empty and len(df) >= 2:
-            df = cluster_days(df, days)
-
-        st.session_state.trip_plan = plan
-        st.session_state.trip_df = df
+            df = geocode_places([origin] + plan["mapcoords"] + [dest])
+            df = cluster_route(df, days)
+            st.session_state.trip_df = df
 
 # =========================================================
 # OUTPUT
 # =========================================================
 if st.session_state.trip_plan:
-    plan = st.session_state.trip_plan
+    p = st.session_state.trip_plan
     df = st.session_state.trip_df
 
-    st.markdown("## 📊 Trip Overview")
+    st.markdown("## 📊 Trip Analytics")
     a, b, c = st.columns(3)
+    a.metric("Budget ($)", p["totalbudget"])
+    b.metric("Mode", p["travelmode"])
+    c.metric("Per Day ($)", round(float(p["totalbudget"]) / days, 2))
 
-    a.metric("Total Budget ($)", plan["totalbudget"])
-    b.metric("Travel Mode", plan["travelmode"])
-    c.metric("Per Day ($)", round(float(plan["totalbudget"]) / days, 2))
+    st.info(f"🌦️ Weather Insight: {p.get('weather','N/A')}")
 
-    st.markdown("### 💸 Budget Breakdown")
-    st.bar_chart(
-        pd.DataFrame.from_dict(
-            budget_split(float(plan["totalbudget"])),
-            orient="index",
-            columns=["Amount"]
-        )
-    )
+    tabs = st.tabs(["📅 Plan", "📍 Places", "🍽️ Stay & Food", "🧠 Smart Map"])
 
-    tabs = st.tabs(["📅 Plan", "📍 Places", "🗺️ Day-wise Map", "🧠 Travel Tips"])
-
-    # ---------------- PLAN TAB ----------------
     with tabs[0]:
-        for day, text in plan["itinerary"].items():
-            st.markdown(
-                f"<div class='card'><b>{day}</b><br>{text}</div>",
-                unsafe_allow_html=True
-            )
+        for d, txt in p["itinerary"].items():
+            st.markdown(f"<div class='card'><b>{d}</b><br>{txt}</div>", unsafe_allow_html=True)
 
-    # ---------------- PLACES TAB ----------------
     with tabs[1]:
-        for place in plan["places"]:
+        for pl in p["places"]:
             st.markdown(
-                f"""
-                <div class='card'>
-                    <b>{place['name']}</b><br>
-                    <span class='tag'>{crowd_level()}</span>
-                    <span class='tag'>Score {place_score()}</span><br>
-                    {place['info']}
-                </div>
-                """,
+                f"<div class='card'><h4>{pl['name']}</h4>{pl['info']}<br><b>Best:</b> {pl['time']}</div>",
                 unsafe_allow_html=True
             )
 
-    # ---------------- MAP TAB ----------------
     with tabs[2]:
-        if df is not None and not df.empty and "day" in df.columns:
-            for d in sorted(df["day"].unique()):
-                st.markdown(f"### Day {d}")
-                sub = df[df["day"] == d]
+        for r in p["restaurants"]:
+            st.markdown(
+                f"<div class='card'><b>{r['name']}</b><br>{r['specialty']}<br>"
+                f"<a href='{r['link']}' target='_blank'>Visit</a></div>",
+                unsafe_allow_html=True
+            )
+        for h in p["hotels"]:
+            st.markdown(
+                f"<div class='card'><b>{h['name']}</b><br>{h['tier']} • {h['price']}<br>"
+                f"<a href='{h['link']}' target='_blank'>Book</a></div>",
+                unsafe_allow_html=True
+            )
 
-                m = folium.Map(
-                    location=[sub.lat.mean(), sub.lon.mean()],
-                    zoom_start=6
-                )
-
-                folium.PolyLine(
-                    list(zip(sub.lat, sub.lon))
-                ).add_to(m)
-
-                for _, r in sub.iterrows():
-                    folium.Marker(
-                        [r.lat, r.lon],
-                        popup=r.name
-                    ).add_to(m)
-
-                st_folium(m, height=350)
-        else:
-            st.info("🗺️ Not enough location data to generate maps.")
-
-    # ---------------- TIPS TAB ----------------
     with tabs[3]:
-        for section, items in plan["tips"].items():
-            st.markdown(f"**{section.capitalize()}**")
-            for i in items:
-                st.write("•", i)
+        if df is not None and not df.empty:
+            m = folium.Map(location=[df.lat.mean(), df.lon.mean()], zoom_start=4)
+            folium.PolyLine(list(zip(df.lat, df.lon))).add_to(m)
+            for _, r in df.iterrows():
+                folium.Marker([r.lat, r.lon], popup=r.name).add_to(m)
+            st_folium(m, height=500, width=1100)
+
+    st.download_button(
+        "📥 Download Trip JSON",
+        json.dumps(p, indent=2),
+        file_name="primecore_trip.json"
+    )
 
 # =========================================================
 # RESET
 # =========================================================
-st.sidebar.button(
-    "🔄 Reset App",
-    on_click=lambda: st.session_state.clear()
-)
+st.sidebar.button("🔄 Reset", on_click=lambda: st.session_state.clear())
