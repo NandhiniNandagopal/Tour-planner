@@ -6,13 +6,14 @@ import random
 import streamlit as st
 import pandas as pd
 import folium
+
 from groq import Groq
 from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
 from sklearn.cluster import KMeans
 
 # =========================================================
-# CONFIG
+# PAGE CONFIG
 # =========================================================
 st.set_page_config(
     page_title="PrimeCore | Global AI Trip Planner",
@@ -20,6 +21,9 @@ st.set_page_config(
     page_icon="🚀",
 )
 
+# =========================================================
+# SESSION STATE
+# =========================================================
 if "trip_plan" not in st.session_state:
     st.session_state.trip_plan = None
 if "trip_df" not in st.session_state:
@@ -36,7 +40,7 @@ st.markdown("""
     background-size: cover;
 }
 .card {
-    background: rgba(255,255,255,.07);
+    background: rgba(255,255,255,.08);
     padding: 16px;
     border-radius: 16px;
     margin-bottom: 12px;
@@ -56,16 +60,16 @@ st.markdown("""
 # HEADER
 # =========================================================
 st.markdown("<h1 style='color:#00d4ff'>PRIMECORE</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#aaa'>JOURNEY ARCHITECT</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#aaa'>Journey Architect</p>", unsafe_allow_html=True)
 
 # =========================================================
-# GROQ
+# GROQ CONFIG
 # =========================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", st.secrets.get("GROQ_API_KEY", ""))
 client = Groq(api_key=GROQ_API_KEY)
 
 # =========================================================
-# AI FUNCTION (UPDATED)
+# AI ITINERARY FUNCTION
 # =========================================================
 def get_itinerary_ai(origin, dest, days, members, theme):
     prompt = f"""
@@ -100,62 +104,84 @@ Theme: {theme}
     return json.loads(chat.choices[0].message.content)
 
 # =========================================================
-# GEO + ML
+# GEO FUNCTIONS
 # =========================================================
+@st.cache_data(show_spinner=False)
 def geocode_places(places):
     geo = Nominatim(user_agent="primecore")
     rows = []
-    for p in places:
+
+    for place in places:
         try:
-            time.sleep(1)
-            loc = geo.geocode(p)
+            time.sleep(0.6)
+            loc = geo.geocode(place)
             if loc:
-                rows.append({"name": p, "lat": loc.latitude, "lon": loc.longitude})
+                rows.append({
+                    "name": place,
+                    "lat": loc.latitude,
+                    "lon": loc.longitude
+                })
         except:
-            pass
+            continue
+
     return pd.DataFrame(rows)
 
 def cluster_days(df, days):
+    if df is None or df.empty or len(df) < 2:
+        return df
+
     k = min(days, len(df))
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
+
+    df = df.copy()
     df["day"] = km.fit_predict(df[["lat", "lon"]]) + 1
     return df.sort_values("day")
 
 # =========================================================
-# HELPERS (NEW)
+# HELPERS
 # =========================================================
 def budget_split(total):
     return {
-        "Stay": total * 0.4,
+        "Stay": total * 0.40,
         "Food": total * 0.25,
-        "Transport": total * 0.2,
+        "Transport": total * 0.20,
         "Activities": total * 0.15,
     }
 
-def crowd():
+def crowd_level():
     return random.choice(["🟢 Calm", "🟡 Moderate", "🔴 Crowded"])
 
-def score():
-    return random.randint(70, 95)
+def place_score():
+    return random.randint(72, 96)
 
 # =========================================================
-# INPUT
+# INPUT SECTION
 # =========================================================
 c1, c2, c3, c4 = st.columns(4)
+
 origin = c1.text_input("Origin", "Mumbai, India")
 dest = c2.text_input("Destination", "Zurich, Switzerland")
-days = c3.number_input("Days", 1, 10, 4)
+days = c3.number_input("Days", 1, 14, 4)
 members = c4.number_input("People", 1, 10, 2)
-theme = st.selectbox("Trip Style", ["Luxury", "Adventure", "Cultural", "Budget", "Romantic"])
+
+theme = st.selectbox(
+    "Trip Style",
+    ["Luxury", "Adventure", "Cultural", "Budget", "Romantic"]
+)
 
 # =========================================================
-# RUN
+# BUILD TRIP
 # =========================================================
 if st.button("🚀 BUILD MY TRIP"):
-    with st.spinner("Building your trip..."):
+    with st.spinner("Designing your journey..."):
         plan = get_itinerary_ai(origin, dest, days, members, theme)
-        df = geocode_places([origin] + plan["mapcoords"] + [dest])
-        df = cluster_days(df, days)
+
+        locations = [origin] + plan.get("mapcoords", []) + [dest]
+        df = geocode_places(locations)
+
+        if df is not None and not df.empty and len(df) >= 2:
+            df = cluster_days(df, days)
+
         st.session_state.trip_plan = plan
         st.session_state.trip_df = df
 
@@ -163,51 +189,87 @@ if st.button("🚀 BUILD MY TRIP"):
 # OUTPUT
 # =========================================================
 if st.session_state.trip_plan:
-    p = st.session_state.trip_plan
+    plan = st.session_state.trip_plan
     df = st.session_state.trip_df
 
-    st.markdown("## 📊 Trip Analytics")
+    st.markdown("## 📊 Trip Overview")
     a, b, c = st.columns(3)
-    a.metric("Budget ($)", p["totalbudget"])
-    b.metric("Mode", p["travelmode"])
-    c.metric("Per Day ($)", round(float(p["totalbudget"]) / days, 2))
 
-    st.markdown("### 💸 Budget Split")
-    st.bar_chart(pd.DataFrame.from_dict(budget_split(float(p["totalbudget"])), orient="index"))
+    a.metric("Total Budget ($)", plan["totalbudget"])
+    b.metric("Travel Mode", plan["travelmode"])
+    c.metric("Per Day ($)", round(float(plan["totalbudget"]) / days, 2))
+
+    st.markdown("### 💸 Budget Breakdown")
+    st.bar_chart(
+        pd.DataFrame.from_dict(
+            budget_split(float(plan["totalbudget"])),
+            orient="index",
+            columns=["Amount"]
+        )
+    )
 
     tabs = st.tabs(["📅 Plan", "📍 Places", "🗺️ Day-wise Map", "🧠 Travel Tips"])
 
+    # ---------------- PLAN TAB ----------------
     with tabs[0]:
-        for d, t in p["itinerary"].items():
-            st.markdown(f"<div class='card'><b>{d}</b><br>{t}</div>", unsafe_allow_html=True)
-
-    with tabs[1]:
-        for pl in p["places"]:
+        for day, text in plan["itinerary"].items():
             st.markdown(
-                f"<div class='card'><b>{pl['name']}</b><br>"
-                f"<span class='tag'>{crowd()}</span>"
-                f"<span class='tag'>Score {score()}</span><br>"
-                f"{pl['info']}</div>",
+                f"<div class='card'><b>{day}</b><br>{text}</div>",
                 unsafe_allow_html=True
             )
 
-    with tabs[2]:
-        for d in sorted(df.day.unique()):
-            st.markdown(f"### Day {d}")
-            sub = df[df.day == d]
-            m = folium.Map(location=[sub.lat.mean(), sub.lon.mean()], zoom_start=6)
-            folium.PolyLine(list(zip(sub.lat, sub.lon))).add_to(m)
-            for _, r in sub.iterrows():
-                folium.Marker([r.lat, r.lon], popup=r.name).add_to(m)
-            st_folium(m, height=350)
+    # ---------------- PLACES TAB ----------------
+    with tabs[1]:
+        for place in plan["places"]:
+            st.markdown(
+                f"""
+                <div class='card'>
+                    <b>{place['name']}</b><br>
+                    <span class='tag'>{crowd_level()}</span>
+                    <span class='tag'>Score {place_score()}</span><br>
+                    {place['info']}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
+    # ---------------- MAP TAB ----------------
+    with tabs[2]:
+        if df is not None and not df.empty and "day" in df.columns:
+            for d in sorted(df["day"].unique()):
+                st.markdown(f"### Day {d}")
+                sub = df[df["day"] == d]
+
+                m = folium.Map(
+                    location=[sub.lat.mean(), sub.lon.mean()],
+                    zoom_start=6
+                )
+
+                folium.PolyLine(
+                    list(zip(sub.lat, sub.lon))
+                ).add_to(m)
+
+                for _, r in sub.iterrows():
+                    folium.Marker(
+                        [r.lat, r.lon],
+                        popup=r.name
+                    ).add_to(m)
+
+                st_folium(m, height=350)
+        else:
+            st.info("🗺️ Not enough location data to generate maps.")
+
+    # ---------------- TIPS TAB ----------------
     with tabs[3]:
-        for k, v in p["tips"].items():
-            st.markdown(f"**{k.capitalize()}**")
-            for i in v:
+        for section, items in plan["tips"].items():
+            st.markdown(f"**{section.capitalize()}**")
+            for i in items:
                 st.write("•", i)
 
 # =========================================================
 # RESET
 # =========================================================
-st.sidebar.button("🔄 Reset", on_click=lambda: st.session_state.clear())
+st.sidebar.button(
+    "🔄 Reset App",
+    on_click=lambda: st.session_state.clear()
+)
